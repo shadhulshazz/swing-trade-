@@ -8,10 +8,29 @@ from alert import send_telegram
 from sheet_log import log_to_sheet
 
 # --- Config ---
-SCORE_THRESHOLD = 5       # out of 6 — raise/lower to tune signal frequency
+SCORE_THRESHOLD = 5  # out of 6 — raise/lower to tune signal frequency
 MIN_RISK_REWARD = 2.0
-CAPITAL = float(os.environ.get("TRADING_CAPITAL", "100000"))
-RISK_PCT = float(os.environ.get("RISK_PCT_PER_TRADE", "1.0"))
+
+
+def get_env_float(key: str, default: str) -> float:
+    """
+    Safely get float from environment variable.
+    Returns default if env var is empty or invalid.
+    """
+    value = os.environ.get(key, default)
+    if not value or not value.strip():
+        value = default
+    try:
+        return float(value)
+    except ValueError:
+        print(
+            f"[scan] Invalid value for {key}: {value!r}, using default: {default}"
+        )
+        return float(default)
+
+
+CAPITAL = get_env_float("TRADING_CAPITAL", "100000")
+RISK_PCT = get_env_float("RISK_PCT_PER_TRADE", "1.0")
 
 
 def main():
@@ -62,10 +81,18 @@ def main():
         )
 
         send_telegram(token, chat_id, msg)
-        log_to_sheet([
-            ticker, score, plan["entry"], plan["stop_loss"], plan["target"],
-            plan["position_size"], plan["risk_reward"], "; ".join(reasons),
-        ])
+        log_to_sheet(
+            [
+                ticker,
+                score,
+                plan["entry"],
+                plan["stop_loss"],
+                plan["target"],
+                plan["position_size"],
+                plan["risk_reward"],
+                "; ".join(reasons),
+            ]
+        )
         alerts_sent += 1
 
     print(f"[scan] Done. {alerts_sent} alert(s) sent.")
