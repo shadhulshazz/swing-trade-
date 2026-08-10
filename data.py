@@ -1,5 +1,5 @@
 """
-data.py — Fetches OHLCV data from Yahoo Finance via yfinance.
+data.py - Fetches OHLCV data from Yahoo Finance via yfinance.
 Fails gracefully: returns None if the ticker is bad or Yahoo is flaky.
 """
 
@@ -9,21 +9,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# How many calendar days of history to pull for indicator calculation
-LOOKBACK_DAYS = 120  # ~6 months — enough for 50/200 MA + ATR
+LOOKBACK_DAYS = 120
 
 
-def fetch(ticker: str) -> pd.DataFrame | None:
-    """
-    Download daily OHLCV data for *ticker*.
-
-    Returns
-    -------
-    pd.DataFrame with columns [Open, High, Low, Close, Volume]
-        Index is DatetimeIndex (UTC-normalised).
-    None
-        If download fails or the result is too short to be useful.
-    """
+def fetch(ticker: str):
     try:
         df = yf.download(
             ticker,
@@ -41,7 +30,6 @@ def fetch(ticker: str) -> pd.DataFrame | None:
         logger.warning("Empty data returned for %s", ticker)
         return None
 
-    # yfinance sometimes returns multi-level columns — flatten
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
 
@@ -53,7 +41,6 @@ def fetch(ticker: str) -> pd.DataFrame | None:
     df = df[list(required_cols)].copy()
     df.dropna(subset=["Close"], inplace=True)
 
-    # Need at least 60 rows for 50-day MA to be meaningful
     if len(df) < 60:
         logger.warning("Insufficient rows (%d) for %s", len(df), ticker)
         return None
@@ -62,5 +49,4 @@ def fetch(ticker: str) -> pd.DataFrame | None:
 
 
 def latest_price(df: pd.DataFrame) -> float:
-    """Return the most recent closing price."""
     return float(df["Close"].iloc[-1])
