@@ -1,11 +1,8 @@
 """
-sheet_log.py — Appends trade-alert rows to the SwingTradeLog Google Sheet.
+sheet_log.py - Appends trade-alert rows to the SwingTradeLog Google Sheet.
+Authentication uses a Service Account JSON key stored as GOOGLE_SHEETS_CREDS env var.
 
-Authentication uses a Service Account JSON key, which is stored as a
-GitHub Actions secret (GOOGLE_SHEETS_CREDS) and passed in as an env var.
-
-Sheet columns (Row 1 headers — must match exactly):
-    Timestamp | Ticker | Score | Entry | StopLoss | Target | Qty | RiskReward | Reasons
+Sheet headers (Row 1): Timestamp | Ticker | Score | Entry | StopLoss | Target | Qty | RiskReward | Reasons
 """
 
 from __future__ import annotations
@@ -25,7 +22,6 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive",
 ]
 
-# Column order — must match the header row in your Google Sheet
 COLUMNS = [
     "Timestamp",
     "Ticker",
@@ -39,11 +35,11 @@ COLUMNS = [
 ]
 
 
-def _get_client() -> gspread.Client | None:
+def _get_client():
     """Authenticate with Google Sheets using the service account JSON."""
     creds_json = os.environ.get("GOOGLE_SHEETS_CREDS")
     if not creds_json:
-        logger.warning("GOOGLE_SHEETS_CREDS not set — Google Sheets logging disabled.")
+        logger.warning("GOOGLE_SHEETS_CREDS not set - Google Sheets logging disabled.")
         return None
     try:
         creds_dict = json.loads(creds_json)
@@ -62,13 +58,9 @@ def log_trade(
     target: float,
     qty: int,
     risk_reward: float,
-    reasons: list[str],
+    reasons: list,
 ) -> bool:
-    """
-    Append one row to the SwingTradeLog sheet.
-
-    Returns True on success, False on any failure.
-    """
+    """Append one row to the SwingTradeLog sheet. Returns True on success."""
     client = _get_client()
     if client is None:
         return False
@@ -76,16 +68,14 @@ def log_trade(
     try:
         sheet = client.open(SHEET_NAME).sheet1
     except gspread.SpreadsheetNotFound:
-        logger.error(
-            "Spreadsheet '%s' not found. Check the name and sharing settings.", SHEET_NAME
-        )
+        logger.error("Spreadsheet '%s' not found. Check the name and sharing settings.", SHEET_NAME)
         return False
     except Exception as exc:
         logger.error("Cannot open spreadsheet: %s", exc)
         return False
 
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    reasons_str = " | ".join(r.strip() for r in reasons[:6])  # keep it concise
+    reasons_str = " | ".join(r.strip() for r in reasons[:6])
 
     row = [
         timestamp,
@@ -99,9 +89,6 @@ def log_trade(
         reasons_str,
     ]
 
-    # Validate column count matches
-    assert len(row) == len(COLUMNS), f"Row length {len(row)} != header length {len(COLUMNS)}"
-
     try:
         sheet.append_row(row, value_input_option="USER_ENTERED")
         logger.info("Logged %s to Google Sheets", ticker)
@@ -112,10 +99,7 @@ def log_trade(
 
 
 def ensure_headers() -> None:
-    """
-    Check if row 1 of the sheet has the expected headers.
-    If the sheet is empty, writes the headers automatically.
-    """
+    """Check/create headers in row 1 if the sheet is empty."""
     client = _get_client()
     if client is None:
         return
@@ -127,10 +111,6 @@ def ensure_headers() -> None:
             sheet.append_row(COLUMNS)
             logger.info("Headers written to empty sheet.")
         elif existing != COLUMNS:
-            logger.warning(
-                "Sheet headers don't match expected. Expected: %s  Got: %s",
-                COLUMNS,
-                existing,
-            )
+            logger.warning("Sheet headers do not match expected. Expected: %s  Got: %s", COLUMNS, existing)
     except Exception as exc:
         logger.warning("Could not verify sheet headers: %s", exc)
