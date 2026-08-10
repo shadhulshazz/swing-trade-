@@ -14,7 +14,7 @@ Environment variables (set as GitHub Secrets / Variables):
 import os
 import sys
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 
 import pytz
 
@@ -29,16 +29,22 @@ from watchlist import WATCHLIST
 # ── Logging ────────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s  %(levelname)-8s  %(name)s — %(message)s",
+    format="%(asctime)s  %(levelname)-8s  %(name)s - %(message)s",
     datefmt="%H:%M:%S",
 )
 logger = logging.getLogger("scan")
 
 # ── Config from env ────────────────────────────────────────────────────────
-CAPITAL = float(os.environ.get("TRADING_CAPITAL") or "100000")
+CAPITAL         = float(os.environ.get("TRADING_CAPITAL")   or "100000")
 RISK_PCT        = float(os.environ.get("RISK_PCT_PER_TRADE") or "1.0")
-SCORE_THRESHOLD = int(os.environ.get("SCORE_THRESHOLD") or "5")
-MIN_RR          = float(os.environ.get("MIN_RISK_REWARD") or "2.0")
+SCORE_THRESHOLD = int(  os.environ.get("SCORE_THRESHOLD")   or "5")
+MIN_RR          = float(os.environ.get("MIN_RISK_REWARD")   or "2.0")
+
+# workflow_dispatch = manual run → always force scan regardless of market hours
+FORCE = (
+    "--force" in sys.argv
+    or os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
+)
 
 IST = pytz.timezone("Asia/Kolkata")
 
@@ -67,9 +73,10 @@ def run_scan() -> None:
     logger.info("=" * 60)
 
     if not is_market_open():
-        logger.info("Market is closed right now — scan aborted. "
-                    "(Run with --force to override.)")
-        if "--force" not in sys.argv:
+        if FORCE:
+            logger.info("Market is closed but --force / workflow_dispatch active — running anyway.")
+        else:
+            logger.info("Market is closed — scan aborted. Use --force to override.")
             return
 
     # Ensure Google Sheet has headers before we start writing
