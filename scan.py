@@ -35,10 +35,10 @@ logging.basicConfig(
 logger = logging.getLogger("scan")
 
 # ── Config from env ────────────────────────────────────────────────────────
-CAPITAL         = float(os.environ.get("TRADING_CAPITAL",   "100000"))
-RISK_PCT        = float(os.environ.get("RISK_PCT_PER_TRADE", "1.0"))
-SCORE_THRESHOLD = int(  os.environ.get("SCORE_THRESHOLD",   "5"))
-MIN_RR          = float(os.environ.get("MIN_RISK_REWARD",   "2.0"))
+CAPITAL         = float(os.environ.get("TRADING_CAPITAL") or "100000")
+RISK_PCT        = float(os.environ.get("RISK_PCT_PER_TRADE") or "1.0")
+SCORE_THRESHOLD = int(os.environ.get("SCORE_THRESHOLD") or "5")
+MIN_RR          = float(os.environ.get("MIN_RISK_REWARD") or "2.0")
 
 IST = pytz.timezone("Asia/Kolkata")
 
