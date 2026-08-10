@@ -26,19 +26,54 @@ import alert
 import sheet_log
 from watchlist import WATCHLIST
 
-# ── Logging ────────────────────────────────────────────────────────────────
+# ── Logging ───────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s  %(levelname)-8s  %(name)s - %(message)s",
+    format="%(asctime)s  %(levelname)-8s  %(name)s — %(message)s",
     datefmt="%H:%M:%S",
 )
 logger = logging.getLogger("scan")
 
+
+def get_env_float(key: str, default: str) -> float:
+    """
+    Safely get float from environment variable.
+    Returns default if env var is empty or invalid.
+    """
+    value = os.environ.get(key, default)
+    if not value or not value.strip():
+        value = default
+    try:
+        return float(value)
+    except ValueError:
+        logger.warning(
+            "Invalid value for %s: %r, using default: %s", key, value, default
+        )
+        return float(default)
+
+
+def get_env_int(key: str, default: str) -> int:
+    """
+    Safely get int from environment variable.
+    Returns default if env var is empty or invalid.
+    """
+    value = os.environ.get(key, default)
+    if not value or not value.strip():
+        value = default
+    try:
+        return int(value)
+    except ValueError:
+        logger.warning(
+            "Invalid value for %s: %r, using default: %s", key, value, default
+        )
+        return int(default)
+
+
 # ── Config from env ────────────────────────────────────────────────────────
-CAPITAL         = float(os.environ.get("TRADING_CAPITAL")   or "100000")
-RISK_PCT        = float(os.environ.get("RISK_PCT_PER_TRADE") or "1.0")
-SCORE_THRESHOLD = int(  os.environ.get("SCORE_THRESHOLD")   or "5")
-MIN_RR          = float(os.environ.get("MIN_RISK_REWARD")   or "2.0")
+CAPITAL = get_env_float("TRADING_CAPITAL", "100000")
+RISK_PCT = get_env_float("RISK_PCT_PER_TRADE", "1.0")
+SCORE_THRESHOLD = get_env_int("SCORE_THRESHOLD", "5")
+MIN_RR = get_env_float("MIN_RISK_REWARD", "2.0")
 
 # workflow_dispatch = manual run → always force scan regardless of market hours
 FORCE = (
@@ -59,7 +94,7 @@ def is_market_open() -> bool:
     # Skip weekends
     if now_ist.weekday() >= 5:
         return False
-    market_open  = now_ist.replace(hour=9,  minute=0,  second=0, microsecond=0)
+    market_open = now_ist.replace(hour=9, minute=0, second=0, microsecond=0)
     market_close = now_ist.replace(hour=15, minute=45, second=0, microsecond=0)
     return market_open <= now_ist <= market_close
 
@@ -67,14 +102,21 @@ def is_market_open() -> bool:
 def run_scan() -> None:
     logger.info("=" * 60)
     logger.info("Swing Trade Scanner starting")
-    logger.info("Capital: ₹%.0f  |  Risk: %.1f%%  |  Min score: %d  |  Min R:R: %.1f",
-                CAPITAL, RISK_PCT, SCORE_THRESHOLD, MIN_RR)
+    logger.info(
+        "Capital: ₹%.0f  |  Risk: %.1f%%  |  Min score: %d  |  Min R:R: %.1f",
+        CAPITAL,
+        RISK_PCT,
+        SCORE_THRESHOLD,
+        MIN_RR,
+    )
     logger.info("Watchlist: %d tickers", len(WATCHLIST))
     logger.info("=" * 60)
 
     if not is_market_open():
         if FORCE:
-            logger.info("Market is closed but --force / workflow_dispatch active — running anyway.")
+            logger.info(
+                "Market is closed but --force / workflow_dispatch active — running anyway."
+            )
         else:
             logger.info("Market is closed — scan aborted. Use --force to override.")
             return
@@ -82,7 +124,7 @@ def run_scan() -> None:
     # Ensure Google Sheet has headers before we start writing
     sheet_log.ensure_headers()
 
-    total   = len(WATCHLIST)
+    total = len(WATCHLIST)
     alerted = 0
     skipped = 0
 
@@ -108,11 +150,20 @@ def run_scan() -> None:
 
         # 3. Score
         result = scoring.score_ticker(ind)
-        logger.info("  Score: %d  |  Price: ₹%.2f  |  RSI: %.1f  |  Vol×: %.1f",
-                    result.score, price, ind["rsi"], ind["volume_ratio"])
+        logger.info(
+            "  Score: %d  |  Price: ₹%.2f  |  RSI: %.1f  |  Vol×: %.1f",
+            result.score,
+            price,
+            ind["rsi"],
+            ind["volume_ratio"],
+        )
 
         if result.score < SCORE_THRESHOLD:
-            logger.info("  Below threshold (%d < %d) — skip", result.score, SCORE_THRESHOLD)
+            logger.info(
+                "  Below threshold (%d < %d) — skip",
+                result.score,
+                SCORE_THRESHOLD,
+            )
             continue
 
         # 4. Risk calculation
@@ -125,12 +176,18 @@ def run_scan() -> None:
         )
 
         if setup is None or not setup.is_valid:
-            logger.info("  Trade setup invalid (ATR=%.2f, R:R failed) — skip", ind["atr"])
+            logger.info(
+                "  Trade setup invalid (ATR=%.2f, R:R failed) — skip", ind["atr"]
+            )
             continue
 
         logger.info(
             "  ALERT  Entry=₹%.2f  SL=₹%.2f  Target=₹%.2f  Qty=%d  R:R=%.1f",
-            setup.entry, setup.stop_loss, setup.target, setup.qty, setup.risk_reward,
+            setup.entry,
+            setup.stop_loss,
+            setup.target,
+            setup.qty,
+            setup.risk_reward,
         )
 
         # 5. Send Telegram alert
