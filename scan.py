@@ -40,11 +40,21 @@ RISK_PCT        = float(os.environ.get("RISK_PCT_PER_TRADE") or "1.0")
 SCORE_THRESHOLD = int(  os.environ.get("SCORE_THRESHOLD")   or "5")
 MIN_RR          = float(os.environ.get("MIN_RISK_REWARD")   or "2.0")
 
+import argparse
+
 # workflow_dispatch = manual run → always force scan regardless of market hours
+parser = argparse.ArgumentParser()
+parser.add_argument("--force", action="store_true")
+parser.add_argument("--ticker", type=str, default="")
+args, _ = parser.parse_known_args()
+
 FORCE = (
-    "--force" in sys.argv
+    args.force
     or os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
 )
+SINGLE_TICKER = args.ticker.strip().upper()
+if SINGLE_TICKER and not SINGLE_TICKER.endswith(".NS"):
+    SINGLE_TICKER += ".NS"
 
 IST = pytz.timezone("Asia/Kolkata")
 
@@ -82,11 +92,18 @@ def run_scan() -> None:
     # Ensure Google Sheet has headers before we start writing
     sheet_log.ensure_headers()
 
-    total   = len(WATCHLIST)
+    tickers_to_scan = [SINGLE_TICKER] if SINGLE_TICKER else WATCHLIST
+    total = len(tickers_to_scan)
+    
+    # If scanning a single ticker requested by the user, bypass the thresholds
+    # so they always get a reply, even if it's a bad score.
+    active_score_thresh = -100 if SINGLE_TICKER else SCORE_THRESHOLD
+    active_min_rr = 0.0 if SINGLE_TICKER else MIN_RR
+
     alerted = 0
     skipped = 0
 
-    for ticker in WATCHLIST:
+    for ticker in tickers_to_scan:
         logger.info("── %s", ticker)
 
         # 1. Fetch data
@@ -111,8 +128,8 @@ def run_scan() -> None:
         logger.info("  Score: %d  |  Price: ₹%.2f  |  RSI: %.1f  |  Vol×: %.1f",
                     result.score, price, ind["rsi"], ind["volume_ratio"])
 
-        if result.score < SCORE_THRESHOLD:
-            logger.info("  Below threshold (%d < %d) — skip", result.score, SCORE_THRESHOLD)
+        if result.score < active_score_thresh:
+            logger.info("  Below threshold (%d < %d) — skip", result.score, active_score_thresh)
             continue
 
         # 4. Risk calculation
@@ -121,12 +138,18 @@ def run_scan() -> None:
             atr=ind["atr"],
             capital=CAPITAL,
             risk_pct=RISK_PCT,
-            min_rr=MIN_RR,
+            min_rr=active_min_rr,
         )
 
         if setup is None or not setup.is_valid:
-            logger.info("  Trade setup invalid (ATR=%.2f, R:R failed) — skip", ind["atr"])
-            continue
+            if SINGLE_TICKER:
+                # If requested manually but RR is impossible, create a dummy setup so we can still alert
+                from risk import TradeSetup
+                setup = TradeSetup(price, price - ind["atr"], price + ind["atr"], 1, 0, 1.0, ind["atr"])
+                logger.info("  Trade setup invalid but sending anyway for manual request")
+            else:
+                logger.info("  Trade setup invalid (ATR=%.2f, R:R failed) — skip", ind["atr"])
+                continue
 
         logger.info(
             "  ALERT  Entry=₹%.2f  SL=₹%.2f  Target=₹%.2f  Qty=%d  R:R=%.1f",

@@ -2,6 +2,11 @@ name: swing-scan
 
 on:
   workflow_dispatch:
+    inputs:
+      ticker:
+        description: 'Specific ticker to scan (e.g. ITC)'
+        required: false
+        type: string
   schedule:
     - cron: "0 3 * * 1-5"
     - cron: "30 3 * * 1-5"
@@ -47,7 +52,12 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run swing scan
-        run: python scan.py
+        run: |
+          if [ -n "${{ github.event.inputs.ticker }}" ]; then
+            python scan.py --ticker "${{ github.event.inputs.ticker }}"
+          else
+            python scan.py
+          fi
 
       - name: Upload run log (on failure)
         if: failure()
