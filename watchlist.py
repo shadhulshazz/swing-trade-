@@ -27,7 +27,7 @@ WATCHLIST = [
     "PERSISTENT.NS",
     "COFORGE.NS",
     "MPHASIS.NS",
-    "LTIM.NS",
+    "TRENT.NS",
     "DMART.NS",
     "IRCTC.NS",
     "INDIGO.NS",

@@ -30,8 +30,6 @@ jobs:
       TELEGRAM_BOT_TOKEN:  ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID:    ${{ secrets.TELEGRAM_CHAT_ID }}
       GOOGLE_SHEETS_CREDS: ${{ secrets.GOOGLE_SHEETS_CREDS }}
-      TRADING_CAPITAL:     ${{ vars.TRADING_CAPITAL }}
-      RISK_PCT_PER_TRADE:  ${{ vars.RISK_PCT_PER_TRADE }}
       SCORE_THRESHOLD:     "5"
       MIN_RISK_REWARD:     "2.0"
 
