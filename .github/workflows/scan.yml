@@ -7,23 +7,6 @@ on:
         description: 'Specific ticker to scan (e.g. ITC)'
         required: false
         type: string
-  schedule:
-    - cron: "0 3 * * 1-5"
-    - cron: "30 3 * * 1-5"
-    - cron: "0 4 * * 1-5"
-    - cron: "30 4 * * 1-5"
-    - cron: "0 5 * * 1-5"
-    - cron: "30 5 * * 1-5"
-    - cron: "0 6 * * 1-5"
-    - cron: "30 6 * * 1-5"
-    - cron: "0 7 * * 1-5"
-    - cron: "30 7 * * 1-5"
-    - cron: "0 8 * * 1-5"
-    - cron: "30 8 * * 1-5"
-    - cron: "0 9 * * 1-5"
-    - cron: "30 9 * * 1-5"
-    - cron: "0 10 * * 1-5"
-    - cron: "15 10 * * 1-5"
 
 jobs:
   scan:
