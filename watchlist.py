@@ -40,3 +40,17 @@ WATCHLIST = [
 
     # Add or remove tickers below this line
 ]
+
+WATCHLIST_SMALL = [
+    "SUZLON.NS",
+    "YESBANK.NS",
+    "IDEA.NS",
+    "RPOWER.NS",
+    "GTLINFRA.NS",
+    "JPPOWER.NS",
+    "SOUTHBANK.NS",
+    "UCOBANK.NS",
+    "IOB.NS",
+    "NHPC.NS",
+    "DISHTV.NS",
+]

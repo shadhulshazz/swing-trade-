@@ -24,7 +24,7 @@ import scoring
 import risk
 import alert
 import sheet_log
-from watchlist import WATCHLIST
+from watchlist import WATCHLIST, WATCHLIST_SMALL
 
 # ── Logging ────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -52,10 +52,15 @@ FORCE = (
     args.force
     or os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
 )
-SINGLE_TICKER = args.ticker.strip().upper()
-if SINGLE_TICKER and not SINGLE_TICKER.endswith(".NS"):
-    SINGLE_TICKER += ".NS"
+raw_ticker = args.ticker.strip().upper()
+IS_SMALL_SCAN = (raw_ticker == "SMALL")
 
+if IS_SMALL_SCAN:
+    SINGLE_TICKER = ""
+else:
+    SINGLE_TICKER = raw_ticker
+    if SINGLE_TICKER and not SINGLE_TICKER.endswith(".NS"):
+        SINGLE_TICKER += ".NS"
 IST = pytz.timezone("Asia/Kolkata")
 
 
@@ -92,7 +97,13 @@ def run_scan() -> None:
     # Ensure Google Sheet has headers before we start writing
     sheet_log.ensure_headers()
 
-    tickers_to_scan = [SINGLE_TICKER] if SINGLE_TICKER else WATCHLIST
+    if IS_SMALL_SCAN:
+        tickers_to_scan = WATCHLIST_SMALL
+        logger.info("Watchlist mode: SMALL (< 50 Rs, 10-day Range <= 10 Rs)")
+    else:
+        tickers_to_scan = [SINGLE_TICKER] if SINGLE_TICKER else WATCHLIST
+        logger.info("Watchlist mode: MAIN")
+        
     total = len(tickers_to_scan)
     
     # If scanning a single ticker requested by the user, bypass the thresholds
@@ -114,6 +125,19 @@ def run_scan() -> None:
             continue
 
         price = data.latest_price(df)
+
+        if IS_SMALL_SCAN:
+            if price > 50:
+                logger.info("  Skipped — Price (%.2f) > 50", price)
+                skipped += 1
+                continue
+            recent_10 = df.tail(10)
+            highest = recent_10['High'].max()
+            lowest = recent_10['Low'].min()
+            if (highest - lowest) > 10:
+                logger.info("  Skipped — 10-day range (%.2f) > 10 Rs", highest - lowest)
+                skipped += 1
+                continue
 
         # 2. Compute indicators
         try:
