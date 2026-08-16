@@ -81,11 +81,11 @@ def acknowledge_updates(last_update_id: int) -> None:
 def scan_single_ticker(ticker: str, chat_id: str) -> None:
     """Run a full scan on one ticker and send the result to Telegram."""
     logger.info("Scanning %s", ticker)
-    send_message(chat_id, f"⏳ Scanning {ticker.replace('.NS','')}... please wait.")
+    # (acknowledgment already sent by caller before this function runs)
 
     df = data.fetch(ticker)
     if df is None:
-        send_message(chat_id, f"❌ Could not fetch data for {ticker.replace('.NS','')}. Check if the ticker is valid (NSE listed).")
+        send_message(chat_id, f"❌ No data found for *{ticker.replace('.NS','')}*. Is it a valid NSE ticker?")
         return
 
     price = data.latest_price(df)
@@ -122,7 +122,7 @@ def scan_single_ticker(ticker: str, chat_id: str) -> None:
 
 def scan_full_watchlist(chat_id: str) -> None:
     """Run scan on all watchlist tickers."""
-    send_message(chat_id, f"⏳ Scanning full watchlist ({len(WATCHLIST)} tickers)... results coming.")
+    # (acknowledgment already sent by caller before this function runs)
     alerted = 0
     skipped = 0
     SCORE_THRESHOLD = int(os.environ.get("SCORE_THRESHOLD") or "5")
@@ -204,10 +204,21 @@ def main():
 
         logger.info("Found /scan command: '%s' (update_id=%d, age=%ds)", text, update_id, now - msg_time)
 
+        # ── INSTANT ACKNOWLEDGMENT ────────────────────────────────────────────
+        # Send this BEFORE any heavy work so the user sees a response immediately
         if ticker_raw:
+            display_ticker = ticker_raw.replace(".NS", "")
+            send_message(chat_id,
+                f"✅ Got it! Scanning *{display_ticker}* now...\n"
+                f"⏱ Results will arrive in ~20 seconds."
+            )
             ticker = ticker_raw if ticker_raw.endswith(".NS") else ticker_raw + ".NS"
             scan_single_ticker(ticker, chat_id)
         else:
+            send_message(chat_id,
+                f"✅ Got it! Scanning full watchlist ({len(WATCHLIST)} tickers)...\n"
+                f"⏱ This takes ~2 minutes. Alerts coming up!"
+            )
             scan_full_watchlist(chat_id)
 
         processed_update_id = update_id
