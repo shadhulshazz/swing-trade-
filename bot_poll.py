@@ -36,7 +36,8 @@ RISK_PCT  = float(os.environ.get("RISK_PCT_PER_TRADE") or "1.0")
 BASE_URL  = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
 # ── How far back to look for commands (seconds) ──────────────────────────────
-LOOKBACK_SECS = 6 * 60   # 6 minutes — covers the 5-min cron gap with slack
+# GitHub cron can run up to 15+ minutes late, so use a generous window.
+LOOKBACK_SECS = 15 * 60  # 15 minutes
 
 
 def send_message(chat_id: str, text: str) -> None:
@@ -171,30 +172,37 @@ def main():
 
     updates = get_updates()
     if not updates:
-        logger.info("No updates from Telegram.")
+        logger.info("No updates from Telegram. Queue is empty.")
         return
 
-    last_update_id = updates[-1]["update_id"]
-    found_command = False
+    logger.info("Got %d update(s) from Telegram. Checking for /scan commands within %d sec window...", len(updates), LOOKBACK_SECS)
 
-    # Process updates newest-first, pick only the most recent /scan command
+    processed_update_id = None
+
+    # Process updates newest-first — pick ONLY the single most recent /scan command
     for update in reversed(updates):
         msg = update.get("message") or update.get("edited_message")
         if not msg:
             continue
+
         msg_time = msg.get("date", 0)
         text = (msg.get("text") or "").strip()
+        update_id = update["update_id"]
 
-        # Only process /scan commands sent within the lookback window
+        logger.info("  update_id=%d  ts=%d  age=%ds  text=%r", update_id, msg_time, now - msg_time, text[:60])
+
+        # Skip commands that are too old
         if msg_time < cutoff:
+            logger.info("  → Too old (%ds > %ds), skipping remaining.", now - msg_time, LOOKBACK_SECS)
             break
+
         if not text.lower().startswith("/scan"):
             continue
 
         ticker_raw = text[5:].strip().upper()
         chat_id = str(msg["chat"]["id"])
 
-        logger.info("Found command: '%s' at ts=%d", text, msg_time)
+        logger.info("Found /scan command: '%s' (update_id=%d, age=%ds)", text, update_id, now - msg_time)
 
         if ticker_raw:
             ticker = ticker_raw if ticker_raw.endswith(".NS") else ticker_raw + ".NS"
@@ -202,15 +210,15 @@ def main():
         else:
             scan_full_watchlist(chat_id)
 
-        found_command = True
+        processed_update_id = update_id
         break  # Only process the single most recent command
 
-    if not found_command:
-        logger.info("No new /scan commands in the last %d seconds.", LOOKBACK_SECS)
-
-    # Always acknowledge — clears the retry queue
-    acknowledge_updates(last_update_id)
-    logger.info("Done. Acknowledged up to update_id=%d", last_update_id)
+    if processed_update_id is not None:
+        # Only acknowledge up to the message we processed — leave later ones untouched
+        acknowledge_updates(processed_update_id)
+        logger.info("Done. Acknowledged up to update_id=%d", processed_update_id)
+    else:
+        logger.info("No new /scan commands found in the last %d seconds.", LOOKBACK_SECS)
 
 
 if __name__ == "__main__":
