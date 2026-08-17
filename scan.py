@@ -24,6 +24,7 @@ import scoring
 import risk
 import alert
 import sheet_log
+import scanner_today
 from watchlist import WATCHLIST, WATCHLIST_SMALL
 
 # ── Logging ────────────────────────────────────────────────────────────────
@@ -54,8 +55,9 @@ FORCE = (
 )
 raw_ticker = args.ticker.strip().upper()
 IS_SMALL_SCAN = (raw_ticker == "SMALL")
+IS_TODAY_SCAN = (raw_ticker == "TODAY")
 
-if IS_SMALL_SCAN:
+if IS_SMALL_SCAN or IS_TODAY_SCAN:
     SINGLE_TICKER = ""
 else:
     SINGLE_TICKER = raw_ticker
@@ -90,9 +92,21 @@ def run_scan() -> None:
     if not is_market_open():
         if FORCE:
             logger.info("Market is closed but --force / workflow_dispatch active — running anyway.")
+            # Only send the closed message if it's explicitly 'today' scan
+            if IS_TODAY_SCAN:
+                alert._env = alert._env
+                token, chat_id = alert._env()
+                if token and chat_id:
+                    import requests
+                    requests.post(f"https://api.telegram.org/bot{token}/sendMessage", 
+                                  json={"chat_id": chat_id, "text": "⚠️ The market is currently closed. Analyzing data from the last trading session."})
         else:
             logger.info("Market is closed — scan aborted. Use --force to override.")
             return
+
+    if IS_TODAY_SCAN:
+        scanner_today.run_today_scan()
+        return
 
     # Ensure Google Sheet has headers before we start writing
     sheet_log.ensure_headers()
